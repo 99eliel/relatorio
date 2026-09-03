@@ -137,7 +137,7 @@ function showLogin(message = "") {
 
 async function isAdmin(user) {
   if (!user) return false;
-  const adminSnap = await getDoc(doc(db, "relatorio_admins", user.uid));
+  const adminSnap = await getDoc(doc(db, "usuarios", user.uid));
   return adminSnap.exists();
 }
 
@@ -173,7 +173,7 @@ function shellHtml() {
 }
 
 async function loadSystems() {
-  const ref = collection(db, "relatorio_systems");
+  const ref = collection(db, "sistemas");
   let snapshot;
   try {
     snapshot = await getDocs(query(ref, orderBy("createdAt", "desc")));
@@ -257,7 +257,7 @@ function systemsHtml() {
 }
 
 async function reportsHtml() {
-  const snap = await getDocs(collection(db, "relatorio_reports"));
+  const snap = await getDocs(collection(db, "relatorios"));
   const reports = snap.docs.map((item) => ({ id: item.id, ...item.data() }))
     .sort((a, b) => String(b.generatedAt || "").localeCompare(String(a.generatedAt || "")));
 
@@ -382,11 +382,11 @@ function openSystemForm(system = null) {
     msg.textContent = "Salvando...";
     try {
       if (editing) {
-        await updateDoc(doc(db, "relatorio_systems", system.id), payload);
+        await updateDoc(doc(db, "sistemas", system.id), payload);
       } else {
         payload.evolutions = [];
         payload.createdAt = serverTimestamp();
-        await addDoc(collection(db, "relatorio_systems"), payload);
+        await addDoc(collection(db, "sistemas"), payload);
       }
       await loadSystems();
       closeModal();
@@ -400,7 +400,7 @@ function openSystemForm(system = null) {
 
   document.getElementById("deleteSystemBtn")?.addEventListener("click", async () => {
     if (!confirm(`Excluir ${system.name}? Essa ação não pode ser desfeita.`)) return;
-    await deleteDoc(doc(db, "relatorio_systems", system.id));
+    await deleteDoc(doc(db, "sistemas", system.id));
     await loadSystems();
     closeModal();
     await renderView("systems");
@@ -479,7 +479,7 @@ function openSystemDetails(system) {
       monthlyIncrease: Number(data.get("monthlyIncrease")) || 0,
       active: true
     };
-    await updateDoc(doc(db, "relatorio_systems", system.id), {
+    await updateDoc(doc(db, "sistemas", system.id), {
       evolutions: [...evolutions, newItem],
       updatedAt: serverTimestamp()
     });
@@ -493,7 +493,7 @@ function openSystemDetails(system) {
     const index = Number(btn.dataset.removeEvolution);
     if (!confirm("Remover esta evolução da composição mensal?")) return;
     const next = evolutions.filter((_, i) => i !== index);
-    await updateDoc(doc(db, "relatorio_systems", system.id), { evolutions: next, updatedAt: serverTimestamp() });
+    await updateDoc(doc(db, "sistemas", system.id), { evolutions: next, updatedAt: serverTimestamp() });
     await loadSystems();
     closeModal();
     openSystemDetails(systems.find((item) => item.id === system.id));
@@ -550,8 +550,8 @@ async function generateReport(system) {
   };
 
   try {
-    await setDoc(doc(db, "relatorio_publicReports", token), payload);
-    await addDoc(collection(db, "relatorio_reports"), { ...payload, createdAt: serverTimestamp() });
+    await setDoc(doc(db, "relatorios_publicos", token), payload);
+    await addDoc(collection(db, "relatorios"), { ...payload, createdAt: serverTimestamp() });
     const url = reportUrl(token);
     closeModal();
     showGeneratedReportDialog(payload, url);
@@ -607,7 +607,7 @@ async function copyText(text) {
 async function renderPublicReport(token) {
   app.innerHTML = `<div class="boot-screen"><div class="spinner"></div><p>Carregando relatório...</p></div>`;
   try {
-    const snap = await getDoc(doc(db, "relatorio_publicReports", token));
+    const snap = await getDoc(doc(db, "relatorios_publicos", token));
     if (!snap.exists()) {
       app.innerHTML = `<main class="login-page"><section class="login-card"><h1>Relatório não encontrado</h1><p>O link pode estar incorreto ou o relatório pode ter sido removido.</p></section></main>`;
       return;
