@@ -1,0 +1,53 @@
+name: Isolar colecoes do painel
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  namespace:
+    if: github.event.head_commit.message == 'chore: isola colecoes do painel no firebase compartilhado'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Aplicar namespace exclusivo
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('app.js')
+          s = p.read_text()
+          replacements = {
+              'doc(db, "admins",': 'doc(db, "relatorio_admins",',
+              'collection(db, "systems")': 'collection(db, "relatorio_systems")',
+              'doc(db, "systems",': 'doc(db, "relatorio_systems",',
+              'collection(db, "reports")': 'collection(db, "relatorio_reports")',
+              'collection(db, "publicReports")': 'collection(db, "relatorio_publicReports")',
+              'doc(db, "publicReports",': 'doc(db, "relatorio_publicReports",'
+          }
+          for old, new in replacements.items():
+              s = s.replace(old, new)
+          p.write_text(s)
+
+          p = Path('firestore.rules')
+          s = p.read_text()
+          s = s.replace('/admins/', '/relatorio_admins/')
+          s = s.replace('/systems/', '/relatorio_systems/')
+          s = s.replace('/reports/', '/relatorio_reports/')
+          s = s.replace('/publicReports/', '/relatorio_publicReports/')
+          p.write_text(s)
+          PY
+
+          rm .github/workflows/namespace-once.yml
+
+      - name: Salvar isolamento
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.js firestore.rules .github/workflows/namespace-once.yml
+          git commit -m "refactor: isola dados do painel no firestore"
+          git push
