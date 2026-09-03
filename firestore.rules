@@ -7,35 +7,35 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return signedIn() && exists(/databases/$(database)/documents/relatorio_admins/$(request.auth.uid));
+      return signedIn()
+        && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.ativo != false;
     }
 
-    // O usuário autenticado só consegue consultar o próprio registro de administrador.
-    match /relatorio_admins/{userId} {
+    // Perfil do usuário autenticado. O ID do documento deve ser o UID do Authentication.
+    match /usuarios/{userId} {
       allow get: if signedIn() && request.auth.uid == userId;
       allow list: if false;
       allow create, update, delete: if false;
     }
 
-    // Dados internos: custos, margens, observações e contratos.
-    match /relatorio_systems/{systemId} {
+    // Dados internos: custos, margens, contratos e evoluções.
+    match /sistemas/{systemId} {
       allow read, create, update, delete: if isAdmin();
     }
 
-    // Histórico administrativo de relatórios gerados.
-    match /relatorio_reports/{reportId} {
+    // Histórico administrativo dos snapshots mensais.
+    match /relatorios/{reportId} {
       allow read, create, update, delete: if isAdmin();
     }
 
-    // Relatório sanitizado para compartilhamento por token.
-    // Não permite listar todos os relatórios; somente abrir um documento quando o token é conhecido.
-    match /relatorio_publicReports/{reportId} {
+    // Snapshot sanitizado que pode ser compartilhado com o cliente por token.
+    match /relatorios_publicos/{reportId} {
       allow get: if true;
       allow list: if false;
       allow create, update, delete: if isAdmin();
     }
 
-    // Bloqueia qualquer coleção não prevista acima.
     match /{document=**} {
       allow read, write: if false;
     }
