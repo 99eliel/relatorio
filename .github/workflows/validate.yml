@@ -1,0 +1,30 @@
+name: Validar painel
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validar sintaxe JavaScript
+        run: node --check app.js
+
+      - name: Conferir arquivos essenciais
+        run: |
+          test -f index.html
+          test -f styles.css
+          test -f manifest.json
+          test -f service-worker.js
+          test -f firestore.rules
