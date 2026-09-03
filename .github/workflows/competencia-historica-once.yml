@@ -21,13 +21,13 @@ jobs:
           p = Path('app.js')
           s = p.read_text()
 
-          def replace_once(old, new, label):
+          def one(old, new, label):
               global s
               if old not in s:
                   raise SystemExit(f'Padrao nao encontrado: {label}')
               s = s.replace(old, new, 1)
 
-          replace_once(
+          one(
           '''function competenceLabel(date = new Date()) {
             return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(date);
           }
@@ -71,36 +71,27 @@ jobs:
             return monthProgress(now);
           }
           ''',
-          'helpers de competencia')
+          'helpers')
 
-          replace_once(
-          '''  document.getElementById("detailReportBtn").addEventListener("click", async () => { await generateReport(system); });
-          }
+          one(
+            'document.getElementById("detailReportBtn").addEventListener("click", async () => { await generateReport(system); });',
+            'document.getElementById("detailReportBtn").addEventListener("click", () => openReportCompetenceDialog(system));',
+            'botao detalhe')
 
-          function safePublicEvolutions(system) {
+          one(
+          '''function safePublicEvolutions(system) {
             return normalizeEvolutions(system)
               .filter((item) => item.active !== false)
           ''',
-          '''  document.getElementById("detailReportBtn").addEventListener("click", () => openReportCompetenceDialog(system));
-          }
-
-          function safePublicEvolutions(system, competenceKey = null) {
+          '''function safePublicEvolutions(system, competenceKey = null) {
             const cutoff = competenceKey ? `${competenceKey}-31` : null;
             return normalizeEvolutions(system)
               .filter((item) => item.active !== false)
               .filter((item) => !cutoff || !item.date || item.date <= cutoff)
           ''',
-          'evolucoes por competencia')
+          'evolucoes')
 
-          replace_once(
-          '''async function generateReport(system) {
-            const token = crypto.randomUUID().replaceAll("-", "");
-            const now = new Date();
-            const progress = monthProgress(now);
-            const monthly = currentMonthly(system);
-            const payload = {
-          ''',
-          '''function openReportCompetenceDialog(system) {
+          dialog = '''function openReportCompetenceDialog(system) {
             closeModal();
             const current = competenceValue(new Date());
             const previous = previousCompetenceValue();
@@ -110,7 +101,7 @@ jobs:
               <section class="modal" style="max-width:560px" role="dialog" aria-modal="true">
                 <div class="modal-header"><h2>Gerar relatório mensal</h2><button class="btn btn-ghost" data-close>Fechar</button></div>
                 <div class="modal-body">
-                  <p style="margin-top:0;color:var(--muted);font-size:13px">Escolha a competência que o relatório representa. Meses já encerrados serão registrados com 100% do ciclo mensal concluído.</p>
+                  <p style="margin-top:0;color:var(--muted);font-size:13px">Escolha a competência do relatório. Meses já encerrados ficam com 100% do ciclo concluído.</p>
                   <form id="reportCompetenceForm">
                     <label>Competência
                       <input id="reportCompetence" name="competence" type="month" required max="${current}" value="${current}">
@@ -143,62 +134,39 @@ jobs:
             });
           }
 
-          async function generateReport(system, competenceKey = competenceValue(new Date())) {
-            const token = crypto.randomUUID().replaceAll("-", "");
-            const now = new Date();
+          '''
+          one('async function generateReport(system) {', dialog + 'async function generateReport(system, competenceKey = competenceValue(new Date())) {', 'funcao relatorio')
+
+          one(
+          '''  const now = new Date();
+            const progress = monthProgress(now);
+            const monthly = currentMonthly(system);
+          ''',
+          '''  const now = new Date();
             const selectedDate = dateFromCompetence(competenceKey);
             const progress = progressForCompetence(competenceKey);
             const publicEvolutions = safePublicEvolutions(system, competenceKey);
             const baseMonthly = Number(system.baseMonthly) || 0;
             const expansionMonthly = publicEvolutions.reduce((sum, item) => sum + (Number(item.monthlyIncrease) || 0), 0);
             const monthly = baseMonthly + expansionMonthly;
-            const payload = {
           ''',
-          'dialogo e geracao por competencia')
+          'calculo relatorio')
 
-          replace_once(
-          '''    competence: competenceLabel(now),
-            generatedAt: now.toISOString(),
-            monthly,
-            baseMonthly: Number(system.baseMonthly) || 0,
-            expansionMonthly: evolutionTotal(system),
-          ''',
-          '''    competence: competenceLabel(selectedDate),
-            competenceKey,
-            generatedAt: now.toISOString(),
-            monthly,
-            baseMonthly,
-            expansionMonthly,
-          ''',
-          'payload competencia')
-
-          replace_once(
-          '''    evolutions: safePublicEvolutions(system),
-          ''',
-          '''    evolutions: publicEvolutions,
-          ''',
-          'evolucoes publicas do periodo')
-
-          replace_once(
-          '''    if (report) {
-              const system = systems.find((item) => item.id === report.dataset.report);
-              if (system) await generateReport(system);
-            }
-          ''',
-          '''    if (report) {
-              const system = systems.find((item) => item.id === report.dataset.report);
-              if (system) openReportCompetenceDialog(system);
-            }
-          ''',
-          'botao de relatorio')
+          one('    competence: competenceLabel(now),', '    competence: competenceLabel(selectedDate),\n    competenceKey,', 'competencia payload')
+          one('    baseMonthly: Number(system.baseMonthly) || 0,', '    baseMonthly,', 'base historica')
+          one('    expansionMonthly: evolutionTotal(system),', '    expansionMonthly,', 'expansao historica')
+          one('    evolutions: safePublicEvolutions(system),', '    evolutions: publicEvolutions,', 'evolucoes payload')
+          one('if (system) await generateReport(system);', 'if (system) openReportCompetenceDialog(system);', 'botao lista')
 
           p.write_text(s)
 
           sw = Path('service-worker.js')
           t = sw.read_text()
-          if 'relatorio-pwa-v2' not in t:
-              raise SystemExit('Versao esperada do service worker nao encontrada')
-          sw.write_text(t.replace('relatorio-pwa-v2', 'relatorio-pwa-v3', 1))
+          if 'relatorio-pwa-v2' in t:
+              t = t.replace('relatorio-pwa-v2', 'relatorio-pwa-v3', 1)
+          elif 'relatorio-pwa-v3' not in t:
+              raise SystemExit('Versao inesperada do cache')
+          sw.write_text(t)
           PY
 
       - name: Validar JavaScript
