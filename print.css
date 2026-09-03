@@ -1,0 +1,49 @@
+@page {
+  size: A4;
+  margin: 0;
+}
+
+@media print {
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 210mm;
+    min-height: 297mm;
+    background: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .report-page {
+    min-height: 297mm;
+    background: #fff !important;
+    padding: 12mm 10mm !important;
+  }
+
+  .report-sheet {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  .report-actions,
+  .toast {
+    display: none !important;
+  }
+
+  .report-hero,
+  .report-kpi,
+  .service-item,
+  .report-note {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .report-section {
+    break-inside: auto;
+  }
+}
