@@ -1,8 +1,9 @@
-const CACHE = "relatorio-pwa-v1";
+const CACHE = "relatorio-pwa-v2";
 const STATIC_ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
+  "./print.css",
   "./app.js",
   "./manifest.json",
   "./icon.svg"
