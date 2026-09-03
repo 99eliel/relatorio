@@ -7,29 +7,29 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      return signedIn() && exists(/databases/$(database)/documents/relatorio_admins/$(request.auth.uid));
     }
 
     // O usuário autenticado só consegue consultar o próprio registro de administrador.
-    match /admins/{userId} {
+    match /relatorio_admins/{userId} {
       allow get: if signedIn() && request.auth.uid == userId;
       allow list: if false;
       allow create, update, delete: if false;
     }
 
     // Dados internos: custos, margens, observações e contratos.
-    match /systems/{systemId} {
+    match /relatorio_systems/{systemId} {
       allow read, create, update, delete: if isAdmin();
     }
 
     // Histórico administrativo de relatórios gerados.
-    match /reports/{reportId} {
+    match /relatorio_reports/{reportId} {
       allow read, create, update, delete: if isAdmin();
     }
 
     // Relatório sanitizado para compartilhamento por token.
     // Não permite listar todos os relatórios; somente abrir um documento quando o token é conhecido.
-    match /publicReports/{reportId} {
+    match /relatorio_publicReports/{reportId} {
       allow get: if true;
       allow list: if false;
       allow create, update, delete: if isAdmin();
