@@ -81,6 +81,41 @@ function competenceLabel(date = new Date()) {
   return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(date);
 }
 
+function competenceValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+function dateFromCompetence(value) {
+  const [year, month] = String(value || "").split("-").map(Number);
+  if (!year || !month || month < 1 || month > 12) return new Date();
+  return new Date(year, month - 1, 1, 12, 0, 0, 0);
+}
+
+function previousCompetenceValue() {
+  const date = new Date();
+  date.setDate(1);
+  date.setMonth(date.getMonth() - 1);
+  return competenceValue(date);
+}
+
+function progressForCompetence(value) {
+  const selected = dateFromCompetence(value);
+  const now = new Date();
+  const selectedIndex = selected.getFullYear() * 12 + selected.getMonth();
+  const currentIndex = now.getFullYear() * 12 + now.getMonth();
+  const days = new Date(selected.getFullYear(), selected.getMonth() + 1, 0).getDate();
+
+  if (selectedIndex < currentIndex) {
+    return { day: days, days, percent: 100, dailyPercent: 100 / days };
+  }
+  if (selectedIndex > currentIndex) {
+    return { day: 0, days, percent: 0, dailyPercent: 100 / days };
+  }
+  return monthProgress(now);
+}
+
 function statusClass(status) {
   if (status === "Ativo") return "ok";
   if (status === "Atenção") return "warn";
@@ -500,12 +535,14 @@ function openSystemDetails(system) {
   }));
 
   document.getElementById("detailEditBtn").addEventListener("click", () => { closeModal(); openSystemForm(system); });
-  document.getElementById("detailReportBtn").addEventListener("click", async () => { await generateReport(system); });
+  document.getElementById("detailReportBtn").addEventListener("click", () => openReportCompetenceDialog(system));
 }
 
-function safePublicEvolutions(system) {
+function safePublicEvolutions(system, competenceKey = null) {
+  const cutoff = competenceKey ? `${competenceKey}-31` : null;
   return normalizeEvolutions(system)
     .filter((item) => item.active !== false)
+    .filter((item) => !cutoff || !item.date || item.date <= cutoff)
     .map((item) => ({
       title: item.title || "Evolução do sistema",
       description: item.description || "",
@@ -515,22 +552,70 @@ function safePublicEvolutions(system) {
     }));
 }
 
-async function generateReport(system) {
+function openReportCompetenceDialog(system) {
+  closeModal();
+  const current = competenceValue(new Date());
+  const previous = previousCompetenceValue();
+  const modal = document.createElement("div");
+  modal.className = "modal-backdrop";
+  modal.innerHTML = `
+    <section class="modal" style="max-width:560px" role="dialog" aria-modal="true">
+      <div class="modal-header"><h2>Gerar relatório mensal</h2><button class="btn btn-ghost" data-close>Fechar</button></div>
+      <div class="modal-body">
+        <p style="margin-top:0;color:var(--muted);font-size:13px">Escolha a competência do relatório. Meses já encerrados ficam com 100% do ciclo concluído.</p>
+        <form id="reportCompetenceForm">
+          <label>Competência
+            <input id="reportCompetence" name="competence" type="month" required max="${current}" value="${current}">
+          </label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+            <button type="button" id="previousMonthBtn" class="btn btn-soft">Usar mês passado</button>
+            <button type="button" id="currentMonthBtn" class="btn btn-ghost">Usar mês atual</button>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-ghost" data-close>Cancelar</button>
+            <button type="submit" class="btn btn-primary">Gerar relatório</button>
+          </div>
+        </form>
+      </div>
+    </section>`;
+  document.body.appendChild(modal);
+  modal.querySelectorAll("[data-close]").forEach((btn) => btn.addEventListener("click", closeModal));
+  modal.addEventListener("click", (event) => { if (event.target === modal) closeModal(); });
+  document.getElementById("previousMonthBtn").addEventListener("click", () => {
+    document.getElementById("reportCompetence").value = previous;
+  });
+  document.getElementById("currentMonthBtn").addEventListener("click", () => {
+    document.getElementById("reportCompetence").value = current;
+  });
+  document.getElementById("reportCompetenceForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const competenceKey = new FormData(event.currentTarget).get("competence");
+    if (!competenceKey) return;
+    await generateReport(system, competenceKey);
+  });
+}
+
+async function generateReport(system, competenceKey = competenceValue(new Date())) {
   const token = crypto.randomUUID().replaceAll("-", "");
   const now = new Date();
-  const progress = monthProgress(now);
-  const monthly = currentMonthly(system);
+  const selectedDate = dateFromCompetence(competenceKey);
+  const progress = progressForCompetence(competenceKey);
+  const publicEvolutions = safePublicEvolutions(system, competenceKey);
+  const baseMonthly = Number(system.baseMonthly) || 0;
+  const expansionMonthly = publicEvolutions.reduce((sum, item) => sum + (Number(item.monthlyIncrease) || 0), 0);
+  const monthly = baseMonthly + expansionMonthly;
   const payload = {
     token,
     systemId: system.id,
     systemName: system.name || "Sistema",
     clientName: system.clientName || "Cliente",
     clientEmail: system.clientEmail || "",
-    competence: competenceLabel(now),
+    competence: competenceLabel(selectedDate),
+    competenceKey,
     generatedAt: now.toISOString(),
     monthly,
-    baseMonthly: Number(system.baseMonthly) || 0,
-    expansionMonthly: evolutionTotal(system),
+    baseMonthly,
+    expansionMonthly,
     dbUsage: Math.max(0, Math.min(100, Number(system.dbUsage) || 0)),
     availability: Math.max(0, Math.min(100, Number(system.availability) || 0)),
     supportCount: Math.max(0, Number(system.supportCount) || 0),
@@ -538,7 +623,7 @@ async function generateReport(system) {
     periodPercent: progress.percent,
     periodDay: progress.day,
     periodDays: progress.days,
-    evolutions: safePublicEvolutions(system),
+    evolutions: publicEvolutions,
     services: [
       "Infraestrutura e disponibilidade do sistema",
       "Banco de dados e armazenamento operacional",
@@ -718,7 +803,7 @@ function bindShellEvents() {
     }
     if (report) {
       const system = systems.find((item) => item.id === report.dataset.report);
-      if (system) await generateReport(system);
+      if (system) openReportCompetenceDialog(system);
     }
     if (openReport) window.open(reportUrl(openReport.dataset.openReport), "_blank", "noopener");
     if (copyReport) await copyText(reportUrl(copyReport.dataset.copyReport));
